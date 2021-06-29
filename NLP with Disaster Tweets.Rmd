@@ -1,0 +1,235 @@
+---
+title: "NLP with Disaster Tweets"
+author: "Priyanka"
+date: "6/29/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Natural Language Processing with Disaster Tweets
+* Predict which Tweets are about real disasters and which ones are not
+ 
+```{r warning=FALSE, message=FALSE}
+library(dplyr)
+library(tidyverse)
+library(tidytext)
+library(tm)
+library(SnowballC)
+library(readr)
+
+train_data <- read.csv("train.csv")
+test_data <- read.csv("test.csv")
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+complete_data <- bind_rows(train_data, test_data)
+glimpse(complete_data)
+head(complete_data)
+
+```
+```{r warning=FALSE, message=FALSE}
+#-------------------- test Corpus
+#Train dataset text Procesiing
+#creating corpus
+
+Corpus  <- VCorpus(VectorSource(complete_data$text))
+
+#Transformation to lowercase
+Corpus <- tm_map(Corpus, content_transformer(tolower))
+
+#removing numbers
+Corpus <- tm_map(Corpus,removeNumbers)
+
+#removing punctuation
+Corpus <- tm_map(Corpus, removePunctuation)
+
+
+#removing stopwords
+Corpus <- tm_map(Corpus, removeWords, stopwords())
+
+
+#stemming
+Corpus <- tm_map(Corpus, stemDocument)
+
+#remove whitespaces
+Corpus <- tm_map(Corpus, stripWhitespace)
+
+as.character(Corpus[[1]])
+
+```
+```{r warning=FALSE, message=FALSE}
+#creating dtm (bag-of-words) model
+Corpus_dtm <- DocumentTermMatrix(Corpus) 
+Corpus_dtm
+Corpus_dtm <- removeSparseTerms(Corpus_dtm, 0.99) 
+Corpus_dtm
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+#converting as matrix
+Corpus_dtm <- as.data.frame(as.matrix(Corpus_dtm))
+
+```
+```{r, warning=FALSE, message=FALSE}
+Corpus_dtm$id <- as.factor(complete_data$id )
+  
+Corpus_dtm$target <- as.factor(complete_data$target)
+  
+
+```
+```{r, warning=FALSE, message=FALSE}
+
+# Fixing incomplete cases
+incomplete.cases <- which(!complete.cases(Corpus_dtm))
+Corpus_dtm[incomplete.cases,] <- rep(0.0, ncol(Corpus_dtm))
+```
+```{r, warning=FALSE, message=FALSE}
+#----------------------- Classification algorithm implementation ---------------
+
+library(caret)
+set.seed(3456)
+trainIndex <- createDataPartition(Corpus_dtm$target , p = .70,
+                                  list = FALSE,
+                                  times = 1)
+train <- Corpus_dtm[ trainIndex,]
+test <- Corpus_dtm[-trainIndex,]
+
+```
+```{r warning=FALSE, message=FALSE}
+#------------------Model Building------------------------------
+set.seed(123)
+library(e1071)
+# nb.model <- naiveBayes
+nb.model <- naiveBayes(x = train[,-108],
+                        y = train$target )
+ 
+summary(nb.model)
+
+
+
+```
+```{r warning=FALSE, message=FALSE} 
+# Predicting the Test set results
+nb_pred <-  predict(nb.model, newdata = test[,-108])
+
+# Making the Confusion Matrix
+cm  <- table(test$target , nb_pred)
+cm
+
+ 
+
+```
+```{r warning=FALSE, message=FALSE}
+error_metric <- function(cm){
+  TN = cm[1,1]
+  TP = cm[2,2]
+  FP = cm[1,2]
+  FN = cm[2,1]
+  accuracy=(TP+TN)/(TP+FP+TN+FN)
+  precision =(TP)/(FP+TP)
+  recall=(TP)/(FN+TP)
+  F_score = 2* ((precision*recall)/(precision+recall))
+  print(paste("Naive Bayes Accuracy",round(accuracy,2)))
+  print(paste("Naive Bayes Precision",round(precision,2)))
+  print(paste("Naive Bayes Recall",round(recall,2)))
+  print(paste("Naive Bayes F_score",round(F_score,2)))
+}
+
+rf_results <- error_metric(cm)
+rf_results
+```
+
+```{r warning=FALSE, message=FALSE}
+
+# Fitting Kernel SVM to the Training set
+# install.packages('e1071')
+library(e1071)
+svm.model <- svm(formula = target ~ .,
+                 data = train,
+                 type = 'C-classification',
+                 kernel = 'radial')
+
+```
+```{r warning=FALSE, message=FALSE}
+
+svm.model
+summary(svm.model)
+# Predicting the Test set results
+svm_pred <-  predict(svm.model, newdata = test[,-108])
+ 
+# Making the Confusion Matrix
+cm2 <- table(test$target , svm_pred)
+cm2
+ 
+```
+```{r warning=FALSE, message=FALSE}
+
+error_metric <- function(cm2){
+  TN = cm2[1,1]
+  TP = cm2[2,2]
+  FP = cm2[1,2]
+  FN = cm2[2,1]
+  accuracy=(TP+TN)/(TP+FP+TN+FN)
+  precision =(TP)/(FP+TP)
+  recall=(TP)/(FN+TP)
+  F_score = 2* ((precision*recall)/(precision+recall))
+  print(paste("SVM Accuracy",round(accuracy,2)))
+  print(paste("SVM Precision",round(precision,2)))
+  print(paste("SVM Recall",round(recall,2)))
+  print(paste("SVM F_score",round(F_score,2)))
+}
+
+
+SVM_results <- error_metric(cm2)
+SVM_results
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+ 
+sample_submission <-  data.frame("id"=test$id,"target"= nb_pred)
+View(sample_submission)
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+# Now creating new CSV file
+write.csv(sample_submission, file = "sample submission.csv",
+           row.names = FALSE)
+
+ 
+```
+```{r warning=FALSE, message=FALSE}
+ 
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+
+```
+```{r warning=FALSE, message=FALSE}
+
+
+```
